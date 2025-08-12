@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 聊天与文件上传</title>
+    <style>
+        /* Basic styling for the chat application */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f4f4f9; 
+            margin: 0; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            padding: 20px; 
+            box-sizing: border-box; 
+        }
+        .chat-container { 
+            width: 100%; 
+            max-width: 700px; 
+            height: 80vh; 
+            background: #fff; 
+            border-radius: 15px; 
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15); 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden; 
+        }
+        .messages { 
+            flex: 1; 
+            padding: 20px; 
+            overflow-y: auto; 
+            border-bottom: 1px solid #eee; 
+            background-color: #fafafa; 
+            scroll-behavior: smooth; 
+        }
+        .message { 
+            margin-bottom: 15px; 
+            padding: 12px 18px; 
+            border-radius: 20px; 
+            max-width: 80%; 
+            word-wrap: break-word; 
+            line-height: 1.5; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+        }
+        .user-message { 
+            background-color: #007bff; 
+            color: #fff; 
+            align-self: flex-end; 
+            margin-left: auto; 
+        }
+        .ai-message { 
+            background-color: #e9ecef; 
+            color: #333; 
+            align-self: flex-start; 
+            margin-right: auto; 
+        }
+        #chat-form { 
+            display: flex; 
+            padding: 20px; 
+            border-top: 1px solid #eee; 
+            background-color: #fff; 
+            align-items: center; 
+            gap: 10px; 
+        }
+        #message-input { 
+            flex: 1; 
+            padding: 12px 20px; 
+            border: 1px solid #ddd; 
+            border-radius: 25px; 
+            font-size: 16px; 
+            outline: none; 
+            transition: border-color 0.3s ease; 
+        }
+        #message-input:focus { 
+            border-color: #007bff; 
+        }
+        button, .upload-button { 
+            padding: 12px 20px; 
+            border: none; 
+            border-radius: 25px; 
+            cursor: pointer; 
+            font-size: 16px; 
+            font-weight: 500; 
+            transition: background-color 0.3s ease, transform 0.2s ease; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
+        }
+        button[type="submit"] { 
+            background-color: #28a745; 
+            color: #fff; 
+        }
+        button[type="submit"]:hover { 
+            background-color: #218838; 
+            transform: translateY(-2px); 
+        }
+        .upload-button { 
+            background-color: #17a2b8; 
+            color: #fff; 
+            text-align: center; 
+            line-height: 1; 
+            display: inline-flex; 
+            align-items: center; 
+            justify-content: center; 
+        }
+        .upload-button:hover { 
+            background-color: #138496; 
+            transform: translateY(-2px); 
+        }
+        /* Responsive design for smaller screens */
+        @media (max-width: 768px) {
+            .chat-container { 
+                width: 95%; 
+                height: 90vh; 
+            }
+            .message { 
+                max-width: 90%; 
+            }
+            #chat-form { 
+                flex-wrap: wrap; 
+                justify-content: center; 
+            }
+            #message-input { 
+                width: 100%; 
+                margin-bottom: 10px; 
+            }
+            button, .upload-button { 
+                flex-grow: 1; 
+                margin: 5px; 
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="messages" id="message-list"></div>
+        <form id="chat-form">
+            <input type="text" id="message-input" placeholder="输入消息...">
+            <label for="file-input" class="upload-button">上传文件</label>
+            <input type="file" id="file-input" style="display: none;">
+            <button type="submit">发送</button>
+        </form>
+    </div>
+    <script>
+        // Unique key for storing chat history in session storage
+        const CHAT_HISTORY_KEY = 'chatHistory';
+
+        // Function to load chat history from session storage on page load
+        function loadChatHistory() {
+            const storedHistory = sessionStorage.getItem(CHAT_HISTORY_KEY);
+            if (storedHistory) {
+                const chatHistory = JSON.parse(storedHistory);
+                chatHistory.forEach(msg => {
+                    addMessageToUI(msg.text, msg.sender, false);
+                });
+            }
+        }
+
+        // Function to save chat history to session storage
+        function saveChatHistory() {
+            const messageList = document.getElementById('message-list');
+            const messages = messageList.querySelectorAll('.message');
+            const chatHistory = [];
+            messages.forEach(msgDiv => {
+                const sender = msgDiv.classList.contains('user-message') ? 'user' : 'ai';
+                chatHistory.push({
+                    text: msgDiv.innerText,
+                    sender: sender
+                });
+            });
+            sessionStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(chatHistory));
+        }
+
+        // Function to add a message to the chat UI and optionally save history
+        function addMessageToUI(text, sender, save = true) {
+            const messageList = document.getElementById('message-list');
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+            messageDiv.classList.add(`${sender}-message`);
+            messageDiv.innerText = text;
+            messageList.appendChild(messageDiv);
+            messageList.scrollTop = messageList.scrollHeight;
+
+            if (save) {
+                saveChatHistory();
+            }
+        }
+
+        // Function to get the full chat history from the UI
+        function getChatHistoryFromUI() {
+            const messages = document.getElementById('message-list').children;
+            const history = [];
+            for (const msgDiv of messages) {
+                if (msgDiv.innerText.trim() === 'AI 正在思考...') continue; // Skip typing indicator
+                
+                const sender = msgDiv.classList.contains('user-message') ? 'user' : 'ai';
+                history.push({
+                    role: sender,
+                    content: msgDiv.innerText
+                });
+            }
+            return history;
+        }
+
+        // Event listener for the chat form submission
+        document.getElementById('chat-form').addEventListener('submit', function(e) {
+            e.preventDefault(); 
+
+            const messageInput = document.getElementById('message-input');
+            const fileInput = document.getElementById('file-input');
+            const question = messageInput.value.trim(); 
+            const file = fileInput.files[0]; 
+
+            if (!question && !file) return;
+
+            let displayMessage = question;
+            if (file) {
+                displayMessage += ` (已上传文件: ${file.name})`;
+            }
+            addMessageToUI(displayMessage, 'user');
+
+            messageInput.value = '';
+            fileInput.value = '';
+
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const base64String = event.target.result; 
+                    sendDataToBackend(question, base64String, file.name); 
+                };
+                reader.readAsDataURL(file); 
+            } else {
+                sendDataToBackend(question, null, null);
+            }
+        });
+
+        async function sendDataToBackend(question, fileBase64, fileName) {
+            // Get the full chat history before sending the new message
+            const history = getChatHistoryFromUI();
+
+            const dataToSend = {
+                question: question, 
+                file: fileBase64,    
+                fileName: fileName,
+                history: history // Include the full chat history in the payload
+            };
+
+            const webhookUrl = 'https://komjetlili.app.n8n.cloud/webhook/40709c1e-75c2-46c5-a78e-7406ba7f9af9'; 
+            try {
+                addMessageToUI('AI 正在思考...', 'ai');
+
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dataToSend),
+                });
+
+                const data = await response.json();
+                
+                const messages = document.getElementById('message-list');
+                const lastMessage = messages.lastChild;
+                if (lastMessage && lastMessage.innerText === 'AI 正在思考...') { 
+                    messages.removeChild(lastMessage); 
+                }
+
+                if (data && data.aiResponse) {
+                    addMessageToUI(data.aiResponse, 'ai');
+                } else {
+                    addMessageToUI('AI 未返回有效回复。', 'ai');
+                }
+            } catch (error) {
+                console.error('Error sending data to webhook:', error);
+                
+                const messages = document.getElementById('message-list');
+                const lastMessage = messages.lastChild;
+                if (lastMessage && lastMessage.innerText === 'AI 正在思考...') { 
+                    messages.removeChild(lastMessage); 
+                }
+                addMessageToUI('抱歉，与 AI 服务通信失败。', 'ai');
+            }
+        }
+
+        // Call the function to load chat history when the page loads
+        document.addEventListener('DOMContentLoaded', loadChatHistory);
+    </script>
+</body>
+</html>
